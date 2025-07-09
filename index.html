@@ -26,7 +26,7 @@
 
     <script>
         let model;
-        let webcam;
+        let webcamStream;
         let isPredicting = false;
         const URL = "./"; // Path to model.json and metadata.json
 
@@ -54,15 +54,20 @@
             displayResults(predictions);
         }
 
-        // Initialize webcam
+        // Initialize webcam using getUserMedia()
         async function initWebcam() {
             try {
-                webcam = new tmImage.Webcam(400, 400); // Width, height
-                await webcam.setup(); // Request camera access
-                await webcam.play();
-                document.getElementById("webcam").appendChild(webcam.canvas);
+                const video = document.getElementById("webcam");
                 
-                // Enable prediction button
+                // Request camera access
+                webcamStream = await navigator.mediaDevices.getUserMedia({
+                    video: { width: 400, height: 400 },
+                    audio: false,
+                });
+                
+                video.srcObject = webcamStream;
+                
+                // Enable buttons
                 document.getElementById("predict-webcam-btn").disabled = false;
                 document.getElementById("stop-webcam-btn").disabled = false;
                 document.getElementById("webcam-btn").disabled = true;
@@ -76,13 +81,17 @@
             isPredicting = true;
             document.getElementById("predict-webcam-btn").disabled = true;
             
+            const video = document.getElementById("webcam");
+            
             async function predictionLoop() {
-                if (!isPredicting || !webcam) return;
+                if (!isPredicting) return;
                 
-                const predictions = await model.predict(webcam.canvas);
+                // Predict from the video frame
+                const predictions = await model.predict(video);
                 displayResults(predictions);
                 
-                window.requestAnimationFrame(predictionLoop); // Continuously predict
+                // Continue predicting in a loop
+                window.requestAnimationFrame(predictionLoop);
             }
             
             predictionLoop();
@@ -91,11 +100,13 @@
         // Stop webcam
         function stopWebcam() {
             isPredicting = false;
-            if (webcam) {
-                webcam.stop();
-                document.getElementById("webcam").innerHTML = "";
+            
+            if (webcamStream) {
+                webcamStream.getTracks().forEach(track => track.stop());
+                document.getElementById("webcam").srcObject = null;
             }
             
+            // Reset buttons
             document.getElementById("predict-webcam-btn").disabled = true;
             document.getElementById("stop-webcam-btn").disabled = true;
             document.getElementById("webcam-btn").disabled = false;
