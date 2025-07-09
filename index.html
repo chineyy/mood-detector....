@@ -1,28 +1,43 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Teachable Machine Image Prediction</title>
+    <title>Teachable Machine Image + Webcam</title>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest"></script>
 </head>
 <body>
-    <h1>Teachable Machine Image Prediction</h1>
+    <h1>Teachable Machine Image + Webcam</h1>
+    
+    <!-- File Upload -->
+    <h2>Upload Image</h2>
     <input type="file" id="file-upload" accept="image/*" />
-    <button onclick="predict()">Predict</button>
+    <button onclick="predictImage()">Predict Image</button>
+    
+    <!-- Webcam -->
+    <h2>Webcam</h2>
+    <button id="webcam-btn" onclick="initWebcam()">Start Webcam</button>
+    <button id="predict-webcam-btn" onclick="predictWebcam()" disabled>Predict Webcam</button>
+    <button id="stop-webcam-btn" onclick="stopWebcam()" disabled>Stop Webcam</button>
+    <br><br>
+    <video id="webcam" width="400" height="400" autoplay muted></video>
+    
+    <!-- Results -->
     <div id="result"></div>
 
     <script>
         let model;
-        const URL = "./"; // If model.json and metadata.json are in the same folder
+        let webcam;
+        let isPredicting = false;
+        const URL = "./"; // Path to model.json and metadata.json
 
+        // Load the Teachable Machine model
         async function loadModel() {
-            const modelURL = URL + "model.json";
-            const metadataURL = URL + "metadata.json";
-            model = await tmImage.load(modelURL, metadataURL);
-            console.log("Model Loaded!");
+            model = await tmImage.load(URL + "model.json", URL + "metadata.json");
+            console.log("Model loaded!");
         }
 
-        async function predict() {
+        // Predict from uploaded image
+        async function predictImage() {
             const fileInput = document.getElementById("file-upload");
             if (fileInput.files.length === 0) {
                 alert("Please upload an image first.");
@@ -36,13 +51,69 @@
             });
 
             const predictions = await model.predict(image);
+            displayResults(predictions);
+        }
+
+        // Initialize webcam
+        async function initWebcam() {
+            try {
+                webcam = new tmImage.Webcam(400, 400); // Width, height
+                await webcam.setup(); // Request camera access
+                await webcam.play();
+                document.getElementById("webcam").appendChild(webcam.canvas);
+                
+                // Enable prediction button
+                document.getElementById("predict-webcam-btn").disabled = false;
+                document.getElementById("stop-webcam-btn").disabled = false;
+                document.getElementById("webcam-btn").disabled = true;
+            } catch (e) {
+                alert("Webcam error: " + e);
+            }
+        }
+
+        // Predict from webcam (real-time)
+        async function predictWebcam() {
+            isPredicting = true;
+            document.getElementById("predict-webcam-btn").disabled = true;
+            
+            async function predictionLoop() {
+                if (!isPredicting || !webcam) return;
+                
+                const predictions = await model.predict(webcam.canvas);
+                displayResults(predictions);
+                
+                window.requestAnimationFrame(predictionLoop); // Continuously predict
+            }
+            
+            predictionLoop();
+        }
+
+        // Stop webcam
+        function stopWebcam() {
+            isPredicting = false;
+            if (webcam) {
+                webcam.stop();
+                document.getElementById("webcam").innerHTML = "";
+            }
+            
+            document.getElementById("predict-webcam-btn").disabled = true;
+            document.getElementById("stop-webcam-btn").disabled = true;
+            document.getElementById("webcam-btn").disabled = false;
+        }
+
+        // Display results
+        function displayResults(predictions) {
             let resultText = "<h3>Predictions:</h3>";
+            predictions.sort((a, b) => b.probability - a.probability);
+            
             predictions.forEach(pred => {
                 resultText += `${pred.className}: ${(pred.probability * 100).toFixed(2)}%<br>`;
             });
+            
             document.getElementById("result").innerHTML = resultText;
         }
 
+        // Load model on startup
         loadModel();
     </script>
 </body>
